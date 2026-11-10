@@ -3,9 +3,6 @@ name = "quickinfer"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "wxsgamma", email = "1170834390@qq.com" }
-]
 requires-python = ">=3.12"
 dependencies = []
 
