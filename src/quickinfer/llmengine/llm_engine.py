@@ -1,0 +1,146 @@
+import atexit
+import gc
+from dataclasses import fields
+from time import perf_counter
+from tqdm.auto import tqdm
+from transformers import AutoTokenizer
+import torch.multiprocessing as mp
+import torch
+
+from quickinfer.llmengine.modelconfig import ModelConfig as Config
+from quickinfer.sampling_params import SamplingParams
+from quickinfer.llmengine.sequence import Sequence
+from quickinfer.llmengine.scheduler import Scheduler
+from quickinfer.llmengine.model_runner import ModelRunner
+
+
+class LLMEngine:
+
+    def __init__(self, model, **kwargs):
+        config_fields = {field.name for field in fields(Config) if field.init and field.name != "model"}
+        unknown = set(kwargs) - config_fields
+        if unknown:
+            raise TypeError(f"Unknown engine options: {', '.join(sorted(unknown))}")
+        config = self.config = Config(model, **kwargs)
+        if not torch.cuda.is_available():
+            raise RuntimeError("Quickinfer requires an NVIDIA CUDA GPU")
+        if config.tensor_parallel_size > torch.cuda.device_count():
+            raise ValueError("tensor_parallel_size exceeds visible CUDA devices")
+        Sequence.block_size = config.kvcache_block_size
+        self.ps = []
+        self.events = []
+        ctx = mp.get_context("spawn")# spawn 启动一个干净的python解释器进程，避免fork带来的问题
+        for i in range(1, config.tensor_parallel_size):
+            event = ctx.Event()
+            process = ctx.Process(target=ModelRunner, args=(config, i, event))
+            process.start()
+            self.ps.append(process)
+            self.events.append(event)
+        try:
+            self.model_runner = ModelRunner(config, 0, self.events)
+            self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True, local_files_only=True)
+        except BaseException:
+            for process in self.ps:
+                if process.is_alive():
+                    process.terminate()
+                process.join(timeout=5)
+            if torch.distributed.is_initialized():
+                torch.distributed.destroy_process_group()
+            raise
+        config.eos = self.tokenizer.eos_token_id
+        self.scheduler = Scheduler(config)
+        self._closed = False
+        atexit.register(self.exit)
+
+    def exit(self):
+        if self._closed:
+            return
+        self._closed = True
+        atexit.unregister(self.exit)
+        self.model_runner.call("exit")
+        del self.model_runner
+        for p in self.ps:
+            p.join()# 等待子进程结束
+        from quickinfer.layers.rotary_embedding import get_rope
+        get_rope.cache_clear()
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    close = exit
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.exit()
+
+    def _prepare_request(self, prompt, sampling_params):
+        if self._closed:
+            raise RuntimeError("Engine is closed")
+        if not isinstance(sampling_params, SamplingParams):
+            raise TypeError("sampling_params must be a SamplingParams instance")
+        if isinstance(prompt, str):
+            prompt = self.tokenizer.encode(prompt)
+        if not isinstance(prompt, list) or not prompt:
+            raise ValueError("Each prompt must contain at least one token")
+        if any(isinstance(t, bool) or not isinstance(t, int) or not 0 <= t < self.config.hf_config.vocab_size for t in prompt):
+            raise ValueError("Prompt token IDs must be integers within the model vocabulary")
+        if len(prompt) + sampling_params.max_tokens > self.config.max_model_len:
+            raise ValueError("Prompt length plus max_tokens exceeds max_model_len")
+        capacity = self.config.num_kvcache_blocks * self.config.kvcache_block_size
+        if len(prompt) + sampling_params.max_tokens > capacity:
+            raise ValueError("Request exceeds KV cache capacity; increase num_kvcache_blocks or GPU memory budget")
+        return prompt
+
+    def add_request(self, prompt: str | list[int], sampling_params: SamplingParams):# 编码prompt
+        prompt = self._prepare_request(prompt, sampling_params)
+        seq = Sequence(prompt, sampling_params)
+        self.scheduler.add(seq)
+
+    def step(self):
+        seqs, is_prefill = self.scheduler.schedule()
+        num_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else -len(seqs)
+        token_ids = self.model_runner.call("run", seqs, is_prefill)
+        self.scheduler.postprocess(seqs, token_ids, is_prefill)
+        outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
+        return outputs, num_tokens
+
+    def is_finished(self):
+        return self.scheduler.is_finished()
+
+    def generate(
+        self,
+        prompts: list[str] | list[list[int]],
+        sampling_params: SamplingParams | list[SamplingParams],
+        use_tqdm: bool = True,
+    ) -> list[dict]:
+        if self._closed:
+            raise RuntimeError("Engine is closed")
+        if not isinstance(sampling_params, list):
+            sampling_params = [sampling_params] * len(prompts)
+        if len(sampling_params) != len(prompts):
+            raise ValueError("Provide one SamplingParams per prompt")
+        prepared = [self._prepare_request(p, sp) for p, sp in zip(prompts, sampling_params)]
+        for prompt, sp in zip(prepared, sampling_params):
+            self.scheduler.add(Sequence(prompt, sp))
+        pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True, disable=not use_tqdm)
+        outputs = {}
+        prefill_throughput = decode_throughput = 0.
+        while not self.is_finished():
+            t = perf_counter()
+            output, num_tokens = self.step()
+            if num_tokens > 0:
+                prefill_throughput = num_tokens / (perf_counter() - t)
+            else:
+                decode_throughput = -num_tokens / (perf_counter() - t)
+            pbar.set_postfix({
+                "Prefill": f"{int(prefill_throughput)}tok/s",
+                "Decode": f"{int(decode_throughput)}tok/s",
+            })
+            for seq_id, token_ids in output:
+                outputs[seq_id] = token_ids
+                pbar.update(1)
+        pbar.close()
+        outputs = [outputs[seq_id] for seq_id in sorted(outputs.keys())]
+        outputs = [{"text": self.tokenizer.decode(token_ids), "token_ids": token_ids} for token_ids in outputs]
+        return outputs

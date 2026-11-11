@@ -1,0 +1,8 @@
+Quickinfer incorporates code adapted from nano-vLLM.
+Original copyright: Copyright (c) 2025 Xingkai Yu
+Original license: MIT; see LICENSE.
+Upstream: https://github.com/GeeeekExplorer/nano-vllm
+Migration source: https://github.com/wxsgamma/nano-vllm
+Source revision: 3097b4a (local working tree, including existing source comments)
+Target baseline: wxsgamma/quickinfer c1066f2
+Migration date: 2026-11-12 (Asia/Shanghai)

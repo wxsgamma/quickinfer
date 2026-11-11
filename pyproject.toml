@@ -1,10 +1,21 @@
 [project]
 name = "quickinfer"
 version = "0.1.0"
-description = "Add your description here"
+description = "A lightweight Qwen3 inference engine adapted from nano-vLLM"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "torch==2.8.0",
+    "triton==3.4.0",
+    "transformers>=4.55,<5",
+    "flash-attn==2.8.3",
+    "numpy>=1.26,<3",
+    "safetensors>=0.4.3",
+    "tqdm>=4.66",
+    "xxhash>=3.4",
+]
 
 [project.scripts]
 quickinfer = "quickinfer.cli:main"
@@ -12,3 +23,15 @@ quickinfer = "quickinfer.cli:main"
 [build-system]
 requires = ["uv_build>=0.12.6,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-cp312-linux_x86_64.whl" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

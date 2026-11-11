@@ -1,4 +1,5 @@
 .venv/
+.migration-backup/
 
 __pycache__/
 *.py[cod]
@@ -18,3 +19,6 @@ dist/
 # 编辑器本地配置
 .vscode/
 .idea/
+
+
+docs/
