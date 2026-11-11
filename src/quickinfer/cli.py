@@ -1,8 +1,10 @@
 import argparse
 
 def run_server(args:argparse.Namespace):
+    from quickinfer.llmengine.llmegine import LLMengine
+    llm=LLMengine(args)
+    llm.run()
     
-    return print(args)
 def run_bench(args:argparse.Namespace):
     return print(args)
 def build_parser()->argparse.ArgumentParser:
