@@ -11,7 +11,7 @@ from quickinfer.models.qwen3 import Qwen3ForCausalLM
 from quickinfer.layers.sampler import Sampler
 from quickinfer.utils.context import set_context, get_context, reset_context
 from quickinfer.utils.loader import load_model
-
+from quickinfer.llmengine.draft import Draft
 
 class ModelRunner:
 
@@ -23,7 +23,7 @@ class ModelRunner:
         self.world_size = config.tensor_parallel_size
         self.rank = rank
         self.event = event
-
+        self.draft = Draft()
         torch.cuda.set_device(rank)
         dist.init_process_group("nccl", config.distributed_init_method,
                                 world_size=self.world_size, rank=rank, timeout=timedelta(seconds=120))
@@ -151,6 +151,7 @@ class ModelRunner:
             end = start + seqlen_q
             seqlen_k = end
             input_ids.extend(seq[start:end])
+            seq.n_gram.append(seq[start:end])
             positions.extend(range(start, end))
             cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
@@ -188,6 +189,7 @@ class ModelRunner:
             input_ids.append(seq.last_token)
             positions.append(len(seq) - 1)
             context_lens.append(len(seq))
+            seq.n_gram.append(seq.last_token)
             slot_mapping.append(seq.block_table[-1] * self.block_size + seq.last_block_num_tokens  - 1)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)

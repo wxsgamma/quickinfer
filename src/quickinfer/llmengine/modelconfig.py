@@ -23,7 +23,7 @@ class ModelConfig:
     eos: int = field(init=False, default=-1)
     distributed_init_method: str = field(init=False)
     shm_name: str = field(init=False)
-
+    use_draft:bool = False
     def __post_init__(self):
         path = Path(self.model).expanduser().resolve()
         if not path.is_dir():
