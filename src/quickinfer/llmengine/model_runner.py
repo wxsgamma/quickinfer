@@ -185,19 +185,43 @@ class ModelRunner:
         positions = []
         slot_mapping = []
         context_lens = []
-        for seq in seqs:
-            input_ids.append(seq.last_token)
-            positions.append(len(seq) - 1)
-            context_lens.append(len(seq))
-            seq.n_gram.append(seq.last_token)
-            slot_mapping.append(seq.block_table[-1] * self.block_size + seq.last_block_num_tokens  - 1)
-        input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
-        positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
-        slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        block_tables = self.prepare_block_tables(seqs)
-        set_context(False, slot_mapping=slot_mapping, context_lens=context_lens, block_tables=block_tables)
-        return input_ids, positions
+        if(seq.enableed_draft):
+            cu_seqlens_q = [0]
+            cu_seqlens_k = [0]
+            max_seqlen_q = 0
+            max_seqlen_k = 0
+            for seq in seqs:
+                gram=self.draft.gen(seq.n_gram)
+                start=len(seq)
+                end=start+len(gram)
+                
+                input_ids.append(seq.last_token)
+                input_ids.append(gram)
+                positions.append(len(seq) - 1)
+                context_lens.append(len(seq)+len(gram))
+                seq.n_gram.append(seq.last_token)
+                slot_mapping.append(seq.block_table[-1] * self.block_size + seq.last_block_num_tokens  - 1)
+            input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
+            positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
+            slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+            context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+            block_tables = self.prepare_block_tables(seqs)
+            set_context(True, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, slot_mapping=slot_mapping, context_lens=context_lens, block_tables=block_tables)
+            return input_ids, positions            
+        else:
+            for seq in seqs:
+                input_ids.append(seq.last_token)
+                positions.append(len(seq) - 1)
+                context_lens.append(len(seq))
+                seq.n_gram.append(seq.last_token)
+                slot_mapping.append(seq.block_table[-1] * self.block_size + seq.last_block_num_tokens  - 1)
+            input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
+            positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
+            slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+            context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+            block_tables = self.prepare_block_tables(seqs)
+            set_context(False, slot_mapping=slot_mapping, context_lens=context_lens, block_tables=block_tables)
+            return input_ids, positions
 
     def prepare_sample(self, seqs: list[Sequence]):
         temperatures = [seq.temperature for seq in seqs]
