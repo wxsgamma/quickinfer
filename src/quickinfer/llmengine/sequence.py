@@ -14,7 +14,7 @@ class SequenceStatus(Enum):
 class Sequence:
     block_size = 256
     counter = count()
-
+    sdnum:int=0
     def __init__(self, token_ids: list[int], sampling_params = SamplingParams()):
         self.seq_id = next(Sequence.counter)
         self.status = SequenceStatus.WAITING
@@ -32,7 +32,7 @@ class Sequence:
         self.enableed_draft:bool =True
         self.n_gram:list[int]=[]
         self.sdmethod: str
-        self.sdnum:int
+        self.sdnum:int=0
 
     def __len__(self):
         return self.num_tokens

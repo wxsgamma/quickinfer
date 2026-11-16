@@ -27,6 +27,7 @@ class LLMEngine:
         if config.tensor_parallel_size > torch.cuda.device_count():
             raise ValueError("tensor_parallel_size exceeds visible CUDA devices")
         Sequence.block_size = config.kvcache_block_size
+        Sequence.sdnum=config.num_draft
         self.ps = []
         self.events = []
         ctx = mp.get_context("spawn")# spawn 启动一个干净的python解释器进程，避免fork带来的问题

@@ -63,11 +63,12 @@ class Scheduler:
                 else:
                     self.preempt(seq)
                     break
-            else:
-                seq.num_scheduled_tokens = 1
-                seq.is_prefill = False
-                self.block_manager.may_append(seq)
-                scheduled_seqs.append(seq)
+            else :
+                if(seq.enableed_draft):
+                    seq.num_scheduled_tokens = 1+seq.sdnum
+                    seq.is_prefill = False
+                    self.block_manager.may_append(seq)
+                    scheduled_seqs.append(seq)
         assert scheduled_seqs
         self.running.extendleft(reversed(scheduled_seqs))
         return scheduled_seqs, False
