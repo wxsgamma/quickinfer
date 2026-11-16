@@ -53,7 +53,8 @@ def add_engine_args(parser):
     parser.add_argument("--kvcache-block-size", type=int, default=256)
     parser.add_argument("--num-kvcache-blocks", type=int, default=-1, help="Optional KV cache block cap")
     parser.add_argument("--enabled-draft",type=bool,default=False,help="enable Speculative Decoding way")
-
+    parser.add_argument("--draft-method",choices=["ngram","modeldraft"],default="ngram",help="the method of Speculative Decoding")
+    parser.add_argument("--num-draft",type=int,default=1,help="the num of Speculative Decoding")
 
 def build_parser():
     parser = argparse.ArgumentParser(prog="quickinfer", description="Lightweight Qwen3 inference")
