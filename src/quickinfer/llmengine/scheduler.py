@@ -81,7 +81,8 @@ class Scheduler:
 
     def postprocess(self, seqs: list[Sequence], token_ids: list[int], is_prefill: bool):
         for seq in seqs:
-            seq.num_scheduled_tokens=1+len(seq.draft_tokens)
+            if seq.enableed_draft:
+                seq.seq.num_scheduled_tokens=1+len(seq.draft_tokens)
             self.block_manager.hash_blocks(seq)
             seq.num_cached_tokens += seq.num_scheduled_tokens
             seq.num_scheduled_tokens = 0

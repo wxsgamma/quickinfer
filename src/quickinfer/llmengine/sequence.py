@@ -31,6 +31,7 @@ class Sequence:
         self.ignore_eos = sampling_params.ignore_eos
         self.enableed_draft:bool =True
         self.n_gram:list[int]=[]
+        self.draft_tokens:list[int]=[]
         self.sdmethod: str
         self.sdnum:int=0
 
@@ -72,7 +73,10 @@ class Sequence:
         self.token_ids.append(token_id)
         self.last_token = token_id
         self.num_tokens += 1
-
+    def append_token(self,token_id:list[int]):
+        self.token_ids.append(token_id)
+        self.last_token = token_id[-1]
+        self.num_tokens+=len(token_id)
     def __getstate__(self):
         last_state = self.last_token if not self.is_prefill else self.token_ids
         return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)
