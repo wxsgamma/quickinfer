@@ -12,6 +12,7 @@ from quickinfer.layers.sampler import Sampler
 from quickinfer.utils.context import set_context, get_context, reset_context
 from quickinfer.utils.loader import load_model
 from quickinfer.llmengine.draft import N_gram
+from quickinfer.utils.context import get_context
 
 class ModelRunner:
 
@@ -193,7 +194,7 @@ class ModelRunner:
             for seq in seqs:
                 gram=self.draft.gen(seq.n_gram)
                 start = len(seq) - 1
-
+                seq.draft_tokens=gram
                 tokens = [seq.last_token] + gram
                 q_len = len(tokens)
                 k_len = start + q_len
@@ -237,7 +238,7 @@ class ModelRunner:
             return input_ids, positions
 
     def prepare_sample(self, seqs: list[Sequence]):
-        temperatures = [seq.temperature for seq in seqs]
+        temperatures = [seq.temperature for seq in seqs for num in seq.sdnum]
         temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
         return temperatures
 
@@ -259,17 +260,33 @@ class ModelRunner:
             graph_vars["block_tables"][:bs, :context.block_tables.size(1)] = context.block_tables
             graph.replay()
             return self.model.compute_logits(graph_vars["outputs"][:bs])
-
+        
     def run(self, seqs: list[Sequence], is_prefill: bool,is_draft:bool) -> list[int]:
+        context=get_context()
         input_ids, positions = self.prepare_prefill(seqs) if is_prefill else self.prepare_decode(seqs)
         temperatures = self.prepare_sample(seqs) if self.rank == 0 else None
-        if is_draft:
-            logits=self.run_model(input_ids, positions, is_prefill,is_draft)
-        else:
-            logits = self.run_model(input_ids, positions, is_prefill)
-            token_ids = self.sampler(logits, temperatures).tolist() if self.rank == 0 else None
+        logits = self.run_model(input_ids, positions, is_prefill)
+        token_ids = self.sampler(logits, temperatures).tolist() if self.rank == 0 else None
+        if not is_draft:
             reset_context()
             return token_ids
+        offsets = context.cu_seqlens_q.tolist()
+        results = []
+        for i, seq in enumerate(seqs):
+            start = offsets[i]
+            end = offsets[i + 1]
+            draft_tokens = seq.draft_tokens
+            target_tokens = token_ids[start:end]
+            accepted = 0
+            for draft, target in zip(draft_tokens, target_tokens[:-1]):
+                if draft != target:
+                    break
+                accepted += 1
+            output_tokens = target_tokens[:accepted + 1]
+            context.cu_seqlens_q[i+1]=offsets[i]+accepted
+            results.append(output_tokens)
+        reset_context()
+        return results
 
     @torch.inference_mode()
     def capture_cudagraph(self):
