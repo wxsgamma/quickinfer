@@ -2,10 +2,19 @@ import contextlib
 import io
 import unittest
 
-from quickinfer.cli import build_parser
+from quickinfer.cli import build_parser, engine_kwargs
 
 
 class CLITest(unittest.TestCase):
+    def test_draft_options_reach_engine(self):
+        command = ["generate", "--model", "unused", "--prompt", "hi"]
+        for flag, expected in [([], False), (["--enabled-draft"], True), (["--enabled-draft", "False"], False)]:
+            with self.subTest(flag=flag):
+                options = engine_kwargs(build_parser().parse_args(command + flag + ["--num-draft", "3"]))
+                self.assertEqual(options["enabled_draft"], expected)
+                self.assertEqual(options["num_draft"], 3)
+                self.assertEqual(options["draft_method"], "ngram")
+
     def test_generate_command(self):
         args = build_parser().parse_args([
             "generate", "--model", "/models/qwen3", "--prompt", "Hello",

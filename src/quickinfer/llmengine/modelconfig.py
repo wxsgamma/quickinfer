@@ -23,9 +23,10 @@ class ModelConfig:
     eos: int = field(init=False, default=-1)
     distributed_init_method: str = field(init=False)
     shm_name: str = field(init=False)
-    enabled_draft:bool = False
-    draft_method:str
-    num_draft:int
+    enabled_draft: bool = False
+    draft_method: str = "ngram"
+    num_draft: int = 4
+
     def __post_init__(self):
         path = Path(self.model).expanduser().resolve()
         if not path.is_dir():
@@ -33,6 +34,12 @@ class ModelConfig:
         if not any(path.glob("*.safetensors")):
             raise ValueError(f"No safetensors weights found in {path}")
         self.model = str(path)
+        if self.draft_method == "n-gram":
+            self.draft_method = "ngram"
+        if self.enabled_draft and self.draft_method != "ngram":
+            raise ValueError(f"Unsupported draft method: {self.draft_method}")
+        if isinstance(self.num_draft, bool) or not isinstance(self.num_draft, int) or self.num_draft < 0:
+            raise ValueError("num_draft must be a non-negative integer")
         if self.dtype not in ("auto", "fp16", "bf16"):
             raise ValueError("dtype must be auto, fp16 or bf16 (FlashAttention requires FP16/BF16)")
         for name in ("max_num_batched_tokens", "max_num_seqs", "max_model_len"):

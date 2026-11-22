@@ -91,20 +91,34 @@ class BlockManager:
             seq.block_table.append(self._allocate_block())
         seq.num_cached_tokens = num_cached_blocks * self.block_size
 
-    def deallocate(self, seq: Sequence):
-        for block_id in reversed(seq.block_table):
+    def trim_blocks(self, seq: Sequence):
+        # 有效 KV 到哪一块就保留到哪一块，末块内被拒绝的槽位下次覆盖。
+        keep = (seq.num_cached_tokens + self.block_size - 1) // self.block_size
+        while len(seq.block_table) > keep:
+            block_id = seq.block_table.pop()
             block = self.blocks[block_id]
             block.ref_count -= 1
             if block.ref_count == 0:
                 self._deallocate_block(block_id)
+
+    def deallocate(self, seq: Sequence):
         seq.num_cached_tokens = 0
-        seq.block_table.clear()
+        self.trim_blocks(seq)
 
-    def can_append(self, seq: Sequence) -> bool:
-        return len(self.free_block_ids) >= (len(seq) % self.block_size == 1)
+    def append_capacity(self, seq: Sequence) -> int:
+        # 本轮从末 token 开始写，可用位置包含本请求已有的块和池中空闲的块。
+        capacity = (len(seq.block_table) + len(self.free_block_ids)) * self.block_size
+        return capacity - (len(seq) - 1)
 
-    def may_append(self, seq: Sequence):
-        if len(seq) % self.block_size == 1:
+    def can_append(self, seq: Sequence, num_tokens: int = 1) -> bool:
+        return self.append_capacity(seq) >= num_tokens
+
+    def may_append(self, seq: Sequence, num_tokens: int = 1):
+        if not self.can_append(seq, num_tokens):
+            raise RuntimeError("Insufficient free KV blocks for scheduled tokens")
+        end = len(seq) - 1 + num_tokens
+        num_blocks = (end + self.block_size - 1) // self.block_size
+        for _ in range(len(seq.block_table), num_blocks):
             seq.block_table.append(self._allocate_block())
 
     def hash_blocks(self, seq: Sequence):

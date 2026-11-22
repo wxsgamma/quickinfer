@@ -62,10 +62,101 @@ class CoreTest(unittest.TestCase):
         self.assertEqual(restored.num_scheduled_tokens, 2)
         seq.is_prefill = False
         seq.append_token(6)
+        seq.draft_tokens = [7, 8]
         restored = pickle.loads(pickle.dumps(seq))
         self.assertEqual(restored.last_token, 6)
         self.assertEqual(len(restored), 4)
         self.assertEqual(restored.block_table, [7])
+        self.assertEqual(restored.draft_tokens, [7, 8])
+
+    def test_draft_history_and_commit(self):
+        config = SimpleNamespace(max_num_seqs=2, max_num_batched_tokens=32, eos=99,
+            kvcache_block_size=256, num_kvcache_blocks=4, enabled_draft=True, draft_method="ngram", num_draft=3)
+        for result, expected in [([3, 17], [3, 17]), ([3, 99, 17], [3, 99]), ([3, 1, 2, 4], [3, 1, 2, 4])]:
+            with self.subTest(result=result):
+                scheduler = Scheduler(config)
+                seq = Sequence([1, 2, 3, 1], SamplingParams(max_tokens=5))
+                scheduler.add(seq)
+                seqs, prefill = scheduler.schedule()
+                scheduler.postprocess(seqs, [2], prefill)
+                seqs, prefill = scheduler.schedule()
+                self.assertEqual(seq.draft_tokens, [3, 1, 2])
+                self.assertEqual(seq.num_scheduled_tokens, 4)
+                self.assertEqual(scheduler.postprocess(seqs, [result], prefill), len(expected))
+                self.assertEqual(seq.completion_token_ids, [2] + expected)
+                self.assertEqual(seq.is_finished, 99 in expected or len(expected) == 4)
+                self.assertEqual(seq.num_cached_tokens, 0 if seq.is_finished else len(seq) - 1)
+
+    def test_cross_block_draft_commit_and_reuse(self):
+        config = SimpleNamespace(max_num_seqs=2, max_num_batched_tokens=2048, eos=99,
+            kvcache_block_size=256, num_kvcache_blocks=7, enabled_draft=True, draft_method="ngram", num_draft=520)
+        for accepted in (0, 2, 256, 520):
+            with self.subTest(accepted=accepted):
+                scheduler = Scheduler(config)
+                manager = scheduler.block_manager
+                seq = Sequence([7] * 767, SamplingParams(max_tokens=600))
+                scheduler.add(seq)
+                seqs, prefill = scheduler.schedule()
+                scheduler.postprocess(seqs, [7], prefill)
+                # 另一个请求共享前两块，自己占一块，让接下来分配的物理块不连续。
+                peer = Sequence([7] * 512 + [9])
+                manager.allocate(peer, manager.can_allocate(peer))
+                seqs, prefill = scheduler.schedule()
+                reserved = seq.block_table.copy()
+                self.assertEqual(seq.num_scheduled_tokens, 521)
+                self.assertEqual(len(reserved), 6)
+                self.assertNotIn(peer.block_table[-1], reserved)
+                self.assertFalse(manager.free_block_ids)
+
+                scheduler.postprocess(seqs, [[7] * accepted + [8]], prefill)
+                valid = 768 + accepted
+                keep = (valid + 255) // 256
+                released = reserved[keep:]
+                self.assertEqual(seq.num_cached_tokens, valid)
+                self.assertEqual(seq.block_table, reserved[:keep])
+                self.assertEqual(set(manager.free_block_ids), set(released))
+                self.assertEqual(set(manager.hash_to_block_id.values()), set(reserved[:valid // 256]))
+                self.assertEqual(manager.blocks[peer.block_table[0]].ref_count, 2)
+                if released:
+                    other = Sequence([42])
+                    manager.allocate(other, manager.can_allocate(other))
+                    self.assertIn(other.block_table[0], released)
+                    manager.deallocate(other)
+                manager.deallocate(peer)
+                manager.deallocate(seq)
+                self.assertCountEqual(manager.free_block_ids, range(7))
+
+    def test_short_draft_at_block_edge_stops_at_eos(self):
+        config = SimpleNamespace(max_num_seqs=1, max_num_batched_tokens=1024, eos=1,
+            kvcache_block_size=256, num_kvcache_blocks=5, enabled_draft=True, draft_method="ngram", num_draft=520)
+        scheduler = Scheduler(config)
+        seq = Sequence([9] * 251 + [1, 2, 3, 1], SamplingParams(max_tokens=600))
+        scheduler.add(seq)
+        seqs, prefill = scheduler.schedule()
+        scheduler.postprocess(seqs, [2], prefill)
+        seqs, prefill = scheduler.schedule()
+        self.assertEqual(seq.draft_tokens, [3, 1, 2])
+        self.assertEqual(len(seq.block_table), 2)
+        first_block = seq.block_table[0]
+        scheduler.postprocess(seqs, [[3, 1, 2, 8]], prefill)
+        self.assertEqual(seq.completion_token_ids, [2, 3, 1])
+        self.assertTrue(seq.is_finished)
+        self.assertCountEqual(scheduler.block_manager.free_block_ids, range(5))
+        self.assertEqual(list(scheduler.block_manager.hash_to_block_id.values()), [first_block])
+
+    def test_shortens_drafts_when_other_requests_own_the_blocks(self):
+        config = SimpleNamespace(max_num_seqs=2, max_num_batched_tokens=1024, eos=99,
+            kvcache_block_size=256, num_kvcache_blocks=2, enabled_draft=True, draft_method="ngram", num_draft=4)
+        scheduler = Scheduler(config)
+        for token in (7, 8):
+            scheduler.add(Sequence([token] * 254))
+        seqs, prefill = scheduler.schedule()
+        scheduler.postprocess(seqs, [7, 8], prefill)
+        seqs, prefill = scheduler.schedule()
+        self.assertFalse(prefill)
+        self.assertEqual([s.draft_tokens for s in seqs], [[7], [8]])
+        self.assertEqual([s.num_scheduled_tokens for s in seqs], [2, 2])
+        self.assertFalse(scheduler.block_manager.free_block_ids)
 
 
 if __name__ == "__main__":

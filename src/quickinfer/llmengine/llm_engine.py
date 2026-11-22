@@ -27,7 +27,6 @@ class LLMEngine:
         if config.tensor_parallel_size > torch.cuda.device_count():
             raise ValueError("tensor_parallel_size exceeds visible CUDA devices")
         Sequence.block_size = config.kvcache_block_size
-        Sequence.sdnum=config.num_draft
         self.ps = []
         self.events = []
         ctx = mp.get_context("spawn")# spawn 启动一个干净的python解释器进程，避免fork带来的问题
@@ -100,9 +99,11 @@ class LLMEngine:
 
     def step(self):
         seqs, is_prefill = self.scheduler.schedule()
-        num_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else -len(seqs)
-        token_ids = self.model_runner.call("run", seqs, is_prefill)
-        self.scheduler.postprocess(seqs, token_ids, is_prefill)
+        prefill_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else 0
+        is_draft = not is_prefill and any(seq.draft_tokens for seq in seqs)
+        token_ids = self.model_runner.call("run", seqs, is_prefill, is_draft)
+        num_emitted = self.scheduler.postprocess(seqs, token_ids, is_prefill)
+        num_tokens = prefill_tokens if is_prefill else -num_emitted
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         return outputs, num_tokens
 

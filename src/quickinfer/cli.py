@@ -5,7 +5,7 @@ import json
 ENGINE_OPTIONS = (
     "dtype", "max_model_len", "max_num_seqs", "max_num_batched_tokens",
     "gpu_memory_utilization", "tensor_parallel_size", "enforce_eager",
-    "kvcache_block_size", "num_kvcache_blocks",
+    "kvcache_block_size", "num_kvcache_blocks", "enabled_draft", "draft_method", "num_draft",
 )
 
 
@@ -41,6 +41,14 @@ def run_bench(args):
     return 0
 
 
+def parse_bool(value):
+    if value.lower() in ("true", "1"):
+        return True
+    if value.lower() in ("false", "0"):
+        return False
+    raise argparse.ArgumentTypeError("expected true or false")
+
+
 def add_engine_args(parser):
     parser.add_argument("--model", required=True, help="Local Qwen3 safetensors directory")
     parser.add_argument("--dtype", choices=["auto", "fp16", "bf16"], default="auto")
@@ -52,9 +60,10 @@ def add_engine_args(parser):
     parser.add_argument("--enforce-eager", action="store_true", help="Disable CUDA graph capture/replay")
     parser.add_argument("--kvcache-block-size", type=int, default=256)
     parser.add_argument("--num-kvcache-blocks", type=int, default=-1, help="Optional KV cache block cap")
-    parser.add_argument("--enabled-draft",type=bool,default=False,help="enable Speculative Decoding way")
-    parser.add_argument("--draft-method",choices=["ngram","modeldraft"],default="ngram",help="the method of Speculative Decoding")
-    parser.add_argument("--num-draft",type=int,default=4,help="the num of Speculative Decoding")
+    parser.add_argument("--enabled-draft", nargs="?", const=True, default=False, type=parse_bool,
+                        help="Enable speculative decoding")
+    parser.add_argument("--draft-method", choices=["ngram", "n-gram", "modeldraft"], default="ngram")
+    parser.add_argument("--num-draft", type=int, default=4, help="Maximum draft tokens per step")
 
 def build_parser():
     parser = argparse.ArgumentParser(prog="quickinfer", description="Lightweight Qwen3 inference")

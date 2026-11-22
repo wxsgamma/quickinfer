@@ -14,7 +14,7 @@ class SequenceStatus(Enum):
 class Sequence:
     block_size = 256
     counter = count()
-    sdnum:int=0
+
     def __init__(self, token_ids: list[int], sampling_params = SamplingParams()):
         self.seq_id = next(Sequence.counter)
         self.status = SequenceStatus.WAITING
@@ -29,11 +29,7 @@ class Sequence:
         self.temperature = sampling_params.temperature
         self.max_tokens = sampling_params.max_tokens
         self.ignore_eos = sampling_params.ignore_eos
-        self.enableed_draft:bool =True
-        self.n_gram:list[int]=[]
-        self.draft_tokens:list[int]=[]
-        self.sdmethod: str
-        self.sdnum:int=0
+        self.draft_tokens: list[int] = []
 
     def __len__(self):
         return self.num_tokens
@@ -69,21 +65,24 @@ class Sequence:
         assert 0 <= i < self.num_blocks
         return self.token_ids[i*self.block_size: (i+1)*self.block_size]
 
-    def append_token(self, token_id: int):
-        self.token_ids.append(token_id)
-        self.last_token = token_id
-        self.num_tokens += 1
-    def append_token(self,token_id:list[int]):
-        self.token_ids.append(token_id)
-        self.last_token = token_id[-1]
-        self.num_tokens+=len(token_id)
+    def append_token(self, token_id: int | list[int]):
+        tokens = [token_id] if isinstance(token_id, int) else token_id
+        if tokens:
+            self.token_ids.extend(tokens)
+            self.last_token = tokens[-1]
+            self.num_tokens += len(tokens)
+
     def __getstate__(self):
         last_state = self.last_token if not self.is_prefill else self.token_ids
-        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)
+        # decode 时各张卡只需要末 token 和调度器选好的这段草稿。
+        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens,
+                self.block_table, last_state, self.draft_tokens)
 
     def __setstate__(self, state):
-        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state = state
-        if isinstance(last_state, list):
+        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state = state[:6]
+        self.draft_tokens = state[6] if len(state) > 6 else []
+        self.is_prefill = isinstance(last_state, list)
+        if self.is_prefill:
             self.token_ids = last_state
             self.last_token = self.token_ids[-1]
         else:

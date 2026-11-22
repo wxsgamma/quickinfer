@@ -1,4 +1,3 @@
-import torch
 from dataclasses import dataclass
 @dataclass
 class Draft:
@@ -7,6 +6,7 @@ class Draft:
         pass
 @dataclass
 class N_gram(Draft):
+    method: str = "ngram"
     n_min:int=2
     n_max:int=4
     k:int=4
