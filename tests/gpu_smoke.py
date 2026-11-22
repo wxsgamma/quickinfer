@@ -4,12 +4,14 @@ import argparse
 import http.client
 import json
 from threading import Thread
+from unittest.mock import patch
 
 import torch
 from quickinfer import LLM, SamplingParams
 from quickinfer.server import create_server
 from quickinfer.benchmark import run_benchmark
 from quickinfer.cli import build_parser
+from quickinfer.utils.context import reset_context, set_context
 
 
 def check_http(llm):
@@ -38,10 +40,122 @@ def check_http(llm):
     assert len(data["outputs"][0]["token_ids"]) == 4, results
 
 
+@torch.inference_mode()
+def check_draft_graph(llm):
+    runner = llm.model_runner
+    scheduler = llm.scheduler
+    torch.manual_seed(731)
+    for prompt in ([7] * 255, [11, 12, 13]):
+        llm.add_request(prompt, SamplingParams(max_tokens=8, ignore_eos=True))
+    while scheduler.waiting:
+        llm.step()
+    seqs = list(scheduler.running)
+    seqs[0].draft_tokens = [17, 23, 29, 31]
+    for seq in seqs:
+        seq.num_scheduled_tokens = 1 + len(seq.draft_tokens)
+        scheduler.block_manager.may_append(seq, seq.num_scheduled_tokens)
+
+    def verify():
+        ids, pos = runner.prepare_decode(seqs, True)
+        return runner.run_model(ids, pos, False).float()
+
+    # 第一条跨块，第二条没有草稿。补图时不能覆盖已有的 KV。
+    prefix = runner.kv_cache[:, :, seqs[0].block_table[0], 0].clone()
+    try:
+        runner.enforce_eager = True
+        expected = verify()
+        runner.enforce_eager = False
+        actual = verify()
+        assert actual.size(0) == 6 and runner.graph_size(6) in runner.graphs
+        # 两种 attention 的 BF16 舍入会有差别，逐行比较采样分布。
+        distance = (actual.softmax(-1) - expected.softmax(-1)).abs().sum(-1) / 2
+        assert torch.all(distance < 0.1), distance.tolist()
+        assert torch.equal(prefix, runner.kv_cache[:, :, seqs[0].block_table[0], 0])
+        # 改最后一个草稿，前面四行和另一条请求的 logits 应该完全一样。
+        seqs[0].draft_tokens[-1] = 71
+        graph, _ = runner.graphs[runner.graph_size(6)]
+        with patch.object(graph, "replay", wraps=graph.replay) as replay:
+            changed = verify()
+            replay.assert_called_once_with()
+        assert torch.equal(changed[:4], actual[:4]) and torch.equal(changed[5], actual[5])
+        assert not torch.equal(changed[4], actual[4])
+    finally:
+        runner.enforce_eager = False
+        reset_context()
+    scheduler.postprocess(seqs, [[19], [21]], False)
+    assert len(seqs[0].block_table) == 1
+    while not llm.is_finished():
+        llm.step()
+    print(json.dumps({"draft_graph_cross_block": "passed"}), flush=True)
+
+
+@torch.inference_mode()
+def check_model_draft(model, draft_model, eager):
+    with LLM(model, draft_model=draft_model, enabled_draft=True, draft_method="modeldraft", num_draft=4,
+             enforce_eager=eager, max_model_len=512, max_num_batched_tokens=128, max_num_seqs=4,
+             num_kvcache_blocks=8) as llm:
+        torch.manual_seed(731)
+        runner = llm.model_runner
+        manager = llm.scheduler.block_manager
+        verify = runner.draft.verify
+        totals = dict(target_rows=0, draft_rows=0, full=0, rejected=0)
+        max_tv = dict(target_rows=0.0, draft_rows=0.0)
+
+        def check(drafts, p, q):
+            outputs = verify(drafts, p, q)
+            seqs = gen.call_args.args[0]
+            offset = 0
+            for i, (seq, draft, output) in enumerate(zip(seqs, drafts, outputs)):
+                ids = torch.tensor(seq.token_ids + draft, device=p.device)
+                n = len(ids)
+                positions = torch.arange(n, device=p.device)
+                cu = torch.tensor([0, n], dtype=torch.int32, device=p.device)
+                # 完整前缀从头计算，用 -1 禁止这次对照前向改写线上 KV。
+                set_context(True, True, cu, cu, n, n, slot_mapping=torch.full_like(positions, -1, dtype=torch.int32))
+                k = len(draft)
+                start = offset + i
+                for name, model, actual in [
+                    ("target_rows", runner.model, p[start:start + k + 1]),
+                    ("draft_rows", runner.draft.model, q[offset:offset + k]),
+                ]:
+                    if len(actual) == 0:
+                        continue
+                    first = len(seq) - 1
+                    hidden = model(ids, positions)[first:first + len(actual)]
+                    expected = (model.compute_logits(hidden).float() / seq.temperature).softmax(-1)
+                    distance = (actual - expected).abs().sum(-1).max().item() / 2
+                    assert distance < 0.1, (name, len(seq), draft, distance)
+                    max_tv[name] = max(max_tv[name], distance)
+                    totals[name] += len(actual)
+                if k:
+                    totals["full" if len(output) == k + 1 else "rejected"] += 1
+                offset += k
+            return outputs
+
+        prompt = llm.tokenizer.encode("A traveler found an old map in a library. ")
+        llm.add_request((prompt * 256)[:255], SamplingParams(0.8, 20, True))
+        llm.add_request("Name a color.", SamplingParams(1.1, 2, True))
+        llm.add_request("Write a short story about the sea.", SamplingParams(0.9, 14, True))
+        with patch.object(runner.draft, "gen", wraps=runner.draft.gen) as gen, patch.object(runner.draft, "verify", check):
+            while llm.scheduler.waiting:
+                llm.step()
+            first = llm.scheduler.running[0]
+            llm.step()  # 第一条草稿跨第 256 个位置，第二条没有草稿。
+            llm.add_request(first.token_ids[:256] + [42], SamplingParams(0.7, 9, True))
+            assert manager.can_allocate(llm.scheduler.waiting[0]) == 1
+            while not llm.is_finished():
+                llm.step()
+        assert len(manager.free_block_ids) == llm.config.num_kvcache_blocks
+        assert totals["draft_rows"] > 0
+        print(json.dumps(dict(model_draft="eager" if eager else "cuda_graph", **totals, max_tv=max_tv)), flush=True)
+
+
 def run(model, eager):
     with LLM(model, enforce_eager=eager, max_model_len=1024,
              max_num_batched_tokens=128, max_num_seqs=3,
              num_kvcache_blocks=16, gpu_memory_utilization=0.15) as llm:
+        if not eager:
+            check_draft_graph(llm)
         events = []
         original_schedule = llm.scheduler.schedule
 
@@ -81,7 +195,12 @@ def run(model, eager):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
+    parser.add_argument("--draft-model")
     args = parser.parse_args()
+    if args.draft_model:
+        for eager in (True, False):
+            check_model_draft(args.model, args.draft_model, eager)
+        raise SystemExit(0)
     for eager in (True, False):
         run(args.model, eager)
     # Regression: a valid two-token context must not fail in benchmark warm-up.

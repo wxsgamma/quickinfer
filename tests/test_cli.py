@@ -14,6 +14,10 @@ class CLITest(unittest.TestCase):
                 self.assertEqual(options["enabled_draft"], expected)
                 self.assertEqual(options["num_draft"], 3)
                 self.assertEqual(options["draft_method"], "ngram")
+        options = engine_kwargs(build_parser().parse_args(command + [
+            "--enabled-draft", "--draft-method", "modeldraft", "--draft-model", "/models/draft",
+        ]))
+        self.assertEqual((options["draft_method"], options["draft_model"]), ("modeldraft", "/models/draft"))
 
     def test_generate_command(self):
         args = build_parser().parse_args([

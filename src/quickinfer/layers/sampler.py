@@ -4,9 +4,15 @@ from torch import nn
 
 class Sampler(nn.Module):
 
+    @staticmethod
+    def probabilities(logits: torch.Tensor, temperatures: torch.Tensor):
+        return torch.softmax(logits.float() / temperatures.unsqueeze(1), dim=-1)
+
+    @staticmethod
+    def sample(probs: torch.Tensor):
+        noise = torch.empty_like(probs).exponential_(1).clamp_min_(1e-10)
+        return (probs / noise).argmax(dim=-1)
+
     @torch.compile
     def forward(self, logits: torch.Tensor, temperatures: torch.Tensor):
-        logits = logits.float().div_(temperatures.unsqueeze(dim=1))
-        probs = torch.softmax(logits, dim=-1)
-        sample_tokens = probs.div_(torch.empty_like(probs).exponential_(1).clamp_min_(1e-10)).argmax(dim=-1)
-        return sample_tokens
+        return self.sample(self.probabilities(logits, temperatures))

@@ -5,7 +5,7 @@ import json
 ENGINE_OPTIONS = (
     "dtype", "max_model_len", "max_num_seqs", "max_num_batched_tokens",
     "gpu_memory_utilization", "tensor_parallel_size", "enforce_eager",
-    "kvcache_block_size", "num_kvcache_blocks", "enabled_draft", "draft_method", "num_draft",
+    "kvcache_block_size", "num_kvcache_blocks", "enabled_draft", "draft_method", "num_draft", "draft_model",
 )
 
 
@@ -63,6 +63,7 @@ def add_engine_args(parser):
     parser.add_argument("--enabled-draft", nargs="?", const=True, default=False, type=parse_bool,
                         help="Enable speculative decoding")
     parser.add_argument("--draft-method", choices=["ngram", "n-gram", "modeldraft"], default="ngram")
+    parser.add_argument("--draft-model", help="Local Qwen3 draft model directory for modeldraft")
     parser.add_argument("--num-draft", type=int, default=4, help="Maximum draft tokens per step")
 
 def build_parser():

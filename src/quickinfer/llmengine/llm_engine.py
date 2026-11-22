@@ -26,6 +26,12 @@ class LLMEngine:
             raise RuntimeError("Quickinfer requires an NVIDIA CUDA GPU")
         if config.tensor_parallel_size > torch.cuda.device_count():
             raise ValueError("tensor_parallel_size exceeds visible CUDA devices")
+        self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True, local_files_only=True)
+        if config.draft_hf_config is not None:
+            draft_tokenizer = AutoTokenizer.from_pretrained(config.draft_model, use_fast=True, local_files_only=True)
+            if draft_tokenizer.get_vocab() != self.tokenizer.get_vocab():
+                raise ValueError("Target and draft tokenizers must use the same token IDs")
+            del draft_tokenizer
         Sequence.block_size = config.kvcache_block_size
         self.ps = []
         self.events = []
@@ -38,7 +44,6 @@ class LLMEngine:
             self.events.append(event)
         try:
             self.model_runner = ModelRunner(config, 0, self.events)
-            self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True, local_files_only=True)
         except BaseException:
             for process in self.ps:
                 if process.is_alive():
@@ -100,7 +105,7 @@ class LLMEngine:
     def step(self):
         seqs, is_prefill = self.scheduler.schedule()
         prefill_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else 0
-        is_draft = not is_prefill and any(seq.draft_tokens for seq in seqs)
+        is_draft = not is_prefill and any(seq.num_scheduled_tokens > 1 for seq in seqs)
         token_ids = self.model_runner.call("run", seqs, is_prefill, is_draft)
         num_emitted = self.scheduler.postprocess(seqs, token_ids, is_prefill)
         num_tokens = prefill_tokens if is_prefill else -num_emitted

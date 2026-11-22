@@ -15,8 +15,12 @@ class Scheduler:
         self.block_size = config.kvcache_block_size
         self.block_manager = BlockManager(config.num_kvcache_blocks, config.kvcache_block_size)
         self.draft = None
+        self.num_model_draft = 0
         if getattr(config, "enabled_draft", False) and config.num_draft > 0:
-            self.draft = N_gram(method=config.draft_method, k=config.num_draft)
+            if config.draft_method == "modeldraft":
+                self.num_model_draft = config.num_draft
+            else:
+                self.draft = N_gram(method=config.draft_method, k=config.num_draft)
         self.waiting: deque[Sequence] = deque()
         self.running: deque[Sequence] = deque()
 
@@ -73,14 +77,17 @@ class Scheduler:
             else:
                 seq.is_prefill = False
                 seq.draft_tokens.clear()
-                if self.draft is not None:
-                    # 末 token 先占一行，剩下的位置才给草稿。
+                num_draft = 0
+                if self.draft is not None or self.num_model_draft:
                     room = min(remaining, seq.max_tokens - seq.num_completion_tokens,
                                self.block_manager.append_capacity(seq)) - 1
-                    if room > 0:
-                        # token_ids 包含 prompt 和已经确认的输出，分块 prefill 也共用这份历史。
+                    if self.num_model_draft:
+                        # 小模型在 GPU 上逐个生成，先给本轮能生成的草稿预留位置。
+                        num_draft = min(self.num_model_draft, room)
+                    elif room > 0:
                         seq.draft_tokens = self.draft.gen(seq.token_ids)[:room]
-                seq.num_scheduled_tokens = 1 + len(seq.draft_tokens)
+                        num_draft = len(seq.draft_tokens)
+                seq.num_scheduled_tokens = 1 + num_draft
                 # 按本轮实际草稿数补齐块，验证时可以沿 block_table 跨块写 KV。
                 self.block_manager.may_append(seq, seq.num_scheduled_tokens)
                 num_batched_tokens += seq.num_scheduled_tokens

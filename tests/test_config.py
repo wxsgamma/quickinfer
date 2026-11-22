@@ -44,6 +44,25 @@ class ConfigTest(unittest.TestCase):
         self.assertNotEqual(first.shm_name, second.shm_name)
         self.assertNotEqual(first.distributed_init_method, second.distributed_init_method)
 
+    def test_draft_model_config(self):
+        options = dict(enabled_draft=True, draft_method="modeldraft")
+        with self.assertRaisesRegex(ValueError, "draft_model"):
+            ModelConfig(str(self.path), **options)
+        self.assertIsNone(ModelConfig(str(self.path), **options, num_draft=0).draft_hf_config)
+        draft = self.path / "draft"
+        draft.mkdir()
+        (draft / "model.safetensors").touch()
+        data = json.loads((self.path / "config.json").read_text())
+        data["max_position_embeddings"] = 512
+        (draft / "config.json").write_text(json.dumps(data))
+        config = ModelConfig(str(self.path), draft_model=str(draft), **options)
+        self.assertEqual(config.max_model_len, 512)
+        self.assertEqual(config.draft_hf_config.dtype, config.hf_config.dtype)
+        data["vocab_size"] += 1
+        (draft / "config.json").write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "vocabulary size"):
+            ModelConfig(str(self.path), draft_model=str(draft), **options)
+
     def test_bad_batch_is_rejected_before_enqueue(self):
         # Validation is CPU-only; bypass CUDA construction and use actual generate logic.
         engine = LLMEngine.__new__(LLMEngine)
