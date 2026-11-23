@@ -5,7 +5,8 @@ import json
 ENGINE_OPTIONS = (
     "dtype", "max_model_len", "max_num_seqs", "max_num_batched_tokens",
     "gpu_memory_utilization", "tensor_parallel_size", "enforce_eager",
-    "kvcache_block_size", "num_kvcache_blocks", "enabled_draft", "draft_method", "num_draft", "draft_model",
+    "kvcache_block_size", "num_kvcache_blocks", "enabled_draft", "draft_method", "num_draft", "draft_model", "dynamic_verify",
+    "draft_early_stop", "prefill_gpu", "decode_gpu",
 )
 
 
@@ -57,6 +58,8 @@ def add_engine_args(parser):
     parser.add_argument("--max-num-batched-tokens", type=int, default=16384)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
+    parser.add_argument("--prefill-gpu", type=int, help="Prefill CUDA device index in CUDA_VISIBLE_DEVICES")
+    parser.add_argument("--decode-gpu", type=int, help="Decode CUDA device index in CUDA_VISIBLE_DEVICES")
     parser.add_argument("--enforce-eager", action="store_true", help="Disable CUDA graph capture/replay")
     parser.add_argument("--kvcache-block-size", type=int, default=256)
     parser.add_argument("--num-kvcache-blocks", type=int, default=-1, help="Optional KV cache block cap")
@@ -65,6 +68,10 @@ def add_engine_args(parser):
     parser.add_argument("--draft-method", choices=["ngram", "n-gram", "modeldraft"], default="ngram")
     parser.add_argument("--draft-model", help="Local Qwen3 draft model directory for modeldraft")
     parser.add_argument("--num-draft", type=int, default=4, help="Maximum draft tokens per step")
+    parser.add_argument("--dynamic-verify", nargs="?", const=True, default=True, type=parse_bool,
+                        help="Choose a verification prefix per request for modeldraft")
+    parser.add_argument("--draft-early-stop", nargs="?", const=True, default=True, type=parse_bool,
+                        help="Stop modeldraft during generation; false selects the prefix after generation")
 
 def build_parser():
     parser = argparse.ArgumentParser(prog="quickinfer", description="Lightweight Qwen3 inference")

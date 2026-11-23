@@ -12,6 +12,7 @@ class Block:
         self.ref_count = 0
         self.hash = -1
         self.token_ids = []
+        self.prefill_kv_ready = False
 
     def update(self, hash: int, token_ids: list[int]):
         self.hash = hash
@@ -21,6 +22,7 @@ class Block:
         self.ref_count = 1
         self.hash = -1
         self.token_ids = []
+        self.prefill_kv_ready = False
 
 
 class BlockManager:
@@ -121,7 +123,7 @@ class BlockManager:
         for _ in range(len(seq.block_table), num_blocks):
             seq.block_table.append(self._allocate_block())
 
-    def hash_blocks(self, seq: Sequence):
+    def hash_blocks(self, seq: Sequence, is_prefill: bool = False):
         start = seq.num_cached_tokens // self.block_size
         end = (seq.num_cached_tokens + seq.num_scheduled_tokens) // self.block_size
         if start == end: return
@@ -131,4 +133,6 @@ class BlockManager:
             token_ids = seq.block(i)
             h = self.compute_hash(token_ids, h)
             block.update(h, token_ids)
+            # decode 新写满的块只在 D 上有效，P 命中这个前缀时要先取回来。
+            block.prefill_kv_ready = is_prefill
             self.hash_to_block_id[h] = block.block_id

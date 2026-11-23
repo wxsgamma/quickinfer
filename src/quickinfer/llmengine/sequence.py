@@ -76,11 +76,13 @@ class Sequence:
         last_state = self.last_token if not self.is_prefill else self.token_ids
         # decode 时各张卡只需要末 token 和调度器选好的这段草稿。
         return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens,
-                self.block_table, last_state, self.draft_tokens)
+                self.block_table, last_state, self.draft_tokens, self.temperature)
 
     def __setstate__(self, state):
         self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state = state[:6]
         self.draft_tokens = state[6] if len(state) > 6 else []
+        # 独立的 prefill 进程要按请求温度采首 token，旧状态仍可用于 TP。
+        self.temperature = state[7] if len(state) > 7 else SamplingParams().temperature
         self.is_prefill = isinstance(last_state, list)
         if self.is_prefill:
             self.token_ids = last_state

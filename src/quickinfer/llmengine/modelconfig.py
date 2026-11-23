@@ -27,6 +27,10 @@ class ModelConfig:
     draft_method: str = "ngram"
     num_draft: int = 4
     draft_model: str | None = None
+    dynamic_verify: bool = True
+    draft_early_stop: bool = True
+    prefill_gpu: int | None = None
+    decode_gpu: int | None = None
     draft_hf_config: object = field(init=False, default=None, repr=False)
 
     def __post_init__(self):
@@ -45,6 +49,13 @@ class ModelConfig:
             raise ValueError("kvcache_block_size must be a positive multiple of 256")
         if not 1 <= self.tensor_parallel_size <= 8:
             raise ValueError("tensor_parallel_size must be between 1 and 8")
+        if self.prefill_gpu is not None or self.decode_gpu is not None:
+            if any(type(device) is not int or device < 0 for device in (self.prefill_gpu, self.decode_gpu)):
+                raise ValueError("Set both prefill_gpu and decode_gpu to non-negative CUDA device indices")
+            if self.prefill_gpu == self.decode_gpu:
+                raise ValueError("prefill_gpu and decode_gpu must be different")
+            if self.tensor_parallel_size != 1:
+                raise ValueError("One-GPU-per-stage PD requires tensor_parallel_size=1")
         if not 0 < self.gpu_memory_utilization <= 1:
             raise ValueError("gpu_memory_utilization must be in (0, 1]")
         if self.num_kvcache_blocks != -1 and self.num_kvcache_blocks <= 0:
@@ -57,6 +68,8 @@ class ModelConfig:
                 resolved = torch.bfloat16
         self.hf_config.dtype = resolved
         if self.enabled_draft and self.draft_method == "modeldraft" and self.num_draft:
+            if self.dynamic_verify and self.draft_early_stop:
+                self.num_draft = min(self.num_draft, 4)
             if not self.draft_model:
                 raise ValueError("modeldraft requires a local draft_model directory")
             self.draft_model, self.draft_hf_config = self.load_config(self.draft_model)

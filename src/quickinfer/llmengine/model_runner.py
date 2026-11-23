@@ -16,15 +16,16 @@ from quickinfer.utils.loader import load_model
 
 class ModelRunner:
 
-    def __init__(self, config: Config, rank: int, event: Event | list[Event]):
+    def __init__(self, config: Config, rank: int, event: Event | list[Event], *, device=None, prefill_only=False):
         self.config = config
         hf_config = config.hf_config
         self.block_size = config.kvcache_block_size
-        self.enforce_eager = config.enforce_eager
+        self.prefill_only = prefill_only
+        self.enforce_eager = prefill_only or config.enforce_eager
         self.world_size = config.tensor_parallel_size
         self.rank = rank
         self.event = event
-        torch.cuda.set_device(rank)
+        torch.cuda.set_device(rank if device is None else device)
         dist.init_process_group("nccl", config.distributed_init_method,
                                 world_size=self.world_size, rank=rank, timeout=timedelta(seconds=120))
         default_dtype = torch.get_default_dtype()
@@ -35,6 +36,7 @@ class ModelRunner:
             self.model = Qwen3ForCausalLM(hf_config)
             load_model(self.model, config.model)
             self.draft = None
+            self.verify_cost = None
             if config.draft_hf_config is not None:
                 draft_model = Qwen3ForCausalLM(config.draft_hf_config)
                 load_model(draft_model, config.draft_model)
@@ -44,6 +46,10 @@ class ModelRunner:
             self.allocate_kv_cache()
             if not self.enforce_eager:
                 self.capture_cudagraph()
+                if self.draft is not None:
+                    self.draft.capture_cudagraph(config)
+            if self.draft is not None and config.dynamic_verify and not prefill_only:
+                self.verify_cost = self.profile_verify()
         finally:
             torch.set_default_device(default_device)
             torch.set_default_dtype(default_dtype)
@@ -65,7 +71,9 @@ class ModelRunner:
                 self.shm.unlink()
         if not self.enforce_eager:
             del self.graphs, self.graph_pool
-        torch.cuda.synchronize()
+            if self.draft is not None:
+                self.draft.graphs.clear()
+        torch.cuda.synchronize(self.kv_cache.device)
         dist.destroy_process_group()
 
     def loop(self):
@@ -123,13 +131,16 @@ class ModelRunner:
         if self.draft is not None:
             models.append((self.draft.model, config.draft_hf_config))
             # 验证时 rank 0 同时持有主模型 logits、草稿概率，以及 FP32 归一化和补采的临时行。
-            if self.rank == 0:
+            if self.rank == 0 and not self.prefill_only:
                 rows = min(config.max_num_batched_tokens, config.max_num_seqs * (1 + config.num_draft))
                 batch_size = min(rows, config.max_num_seqs)
                 vocab = config.hf_config.vocab_size
                 fp32 = torch.float32.itemsize
                 verify_bytes = rows * (config.hf_config.dtype.itemsize + 3 * fp32) + batch_size * 4 * fp32
                 workspace = max(workspace, vocab * verify_bytes)
+                if not self.enforce_eager:
+                    # 草稿图的词表概率、logits 和采样临时显存在重放后还会保留。
+                    workspace += batch_size * vocab * (4 * fp32 + config.draft_hf_config.dtype.itemsize * 2)
         shapes = []
         block_bytes = 0
         for _, hf in models:
@@ -147,9 +158,11 @@ class ModelRunner:
         config.num_kvcache_blocks = min(available_blocks, requested_blocks) if requested_blocks > 0 else available_blocks
         if config.num_kvcache_blocks <= 0:
             raise ValueError("Insufficient free GPU memory for KV cache; select a free GPU or adjust the memory budget")
+        self.kv_caches = []
         for (model, hf), (layers, size, heads, head_dim) in zip(models, shapes):
             # 两个模型共用块号和回收时机，各层的 K、V 存在各自的显存里。
             cache = torch.empty(2, layers, config.num_kvcache_blocks, size, heads, head_dim, dtype=hf.dtype)
+            self.kv_caches.append(cache)
             if model is self.model:
                 self.kv_cache = cache
             layer_id = 0
@@ -265,7 +278,9 @@ class ModelRunner:
                 input_ids.append(seq.last_token)
                 positions.append(len(seq) - 1)
                 context_lens.append(len(seq))
-                slot_mapping.append(seq.block_table[-1] * self.block_size + (len(seq) - 1) % self.block_size)
+                # 动态送验可能把整段草稿裁空，预留的末块不一定是当前 token 所在的块。
+                block, offset = divmod(len(seq) - 1, self.block_size)
+                slot_mapping.append(seq.block_table[block] * self.block_size + offset)
             input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
             positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
             slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
@@ -290,6 +305,42 @@ class ModelRunner:
         return min(1 << (num_tokens - 1).bit_length(), self.config.max_num_batched_tokens)
 
     @torch.inference_mode()
+    def profile_verify(self):
+        config = self.config
+        width = min(1 + config.num_draft, config.max_model_len)
+        limit = min(128, config.max_num_batched_tokens, config.max_num_seqs * width)
+        if limit == 1:
+            return 1., 0.
+        # 在当前模型和硬件上量出固定耗时和每多验一行的成本。只在启动时测两档。
+        times = []
+        prefix = min(128, self.block_size, config.max_model_len - width + 1)
+        self.kv_cache[:, :, 0].zero_()
+        for rows in (1, limit):
+            seqs = []
+            for offset in range(0, rows, width):
+                seq = Sequence([0] * prefix)
+                seq.draft_tokens = [0] * (min(width, rows - offset) - 1)
+                seq.block_table = [0] * ((prefix + len(seq.draft_tokens) - 1) // self.block_size + 1)
+                seqs.append(seq)
+            ids, pos = self.prepare_decode(seqs, True)
+            get_context().slot_mapping.fill_(-1)
+            temperatures = torch.ones(rows, dtype=torch.float32, device=ids.device)
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            for i in range(7):
+                if i == 2:  # 前两次预热，不计入耗时。
+                    start.record()
+                logits = self.run_model(ids, pos, False)
+                if logits is not None:
+                    Sampler.probabilities(logits, temperatures)
+            end.record()
+            end.synchronize()
+            times.append(start.elapsed_time(end) / 5)
+        reset_context()
+        row_ms = max(0., (times[1] - times[0]) / (limit - 1))
+        return max(0., times[0] - row_ms), row_ms
+
+    @torch.inference_mode()
     def run_model(self, input_ids: torch.Tensor, positions: torch.Tensor, is_prefill: bool):
         context = get_context()
         bs = input_ids.size(0)
@@ -311,9 +362,20 @@ class ModelRunner:
     def run(self, seqs: list[Sequence], is_prefill: bool, is_draft: bool = False) -> list[int] | list[list[int]] | None:
         try:
             draft_probs = None
+            draft_rows = None
             if self.draft is not None and not is_prefill:
                 temperatures = self.prepare_sample(seqs) if self.rank == 0 else None
-                draft_probs = self.draft.gen(seqs, self.prepare_block_tables(seqs), temperatures)
+                tables = self.prepare_block_tables(seqs)
+                dynamic = is_draft and self.verify_cost is not None
+                if dynamic and self.config.draft_early_stop:
+                    draft_probs, draft_rows = self.draft.gen(seqs, tables, temperatures, self.verify_cost)
+                else:
+                    draft_probs = self.draft.gen(seqs, tables, temperatures)
+                    if dynamic:
+                        draft_rows = self.draft.select_for_verify(seqs, draft_probs, self.verify_cost, tables.device)
+                if draft_rows == []:  # 所有请求都只验锚点，直接走普通 decode。
+                    is_draft = False
+                    draft_probs = None
             input_ids, positions = self.prepare_prefill(seqs) if is_prefill else self.prepare_decode(seqs, is_draft)
             if self.draft is not None and is_prefill:
                 # prompt 的每个分块也给小模型过一遍，后续可直接从末 token 开始猜。
@@ -324,7 +386,10 @@ class ModelRunner:
                 return None
             if draft_probs is not None:
                 probs = Sampler.probabilities(logits, temperatures)
-                return self.draft.verify([seq.draft_tokens for seq in seqs], probs, draft_probs)
+                drafts = [seq.draft_tokens for seq in seqs]
+                if draft_rows is not None:
+                    return self.draft.verify(drafts, probs, draft_probs, draft_rows)
+                return self.draft.verify(drafts, probs, draft_probs)
             token_ids = self.sampler(logits, temperatures).tolist()
             if not is_draft:
                 return token_ids

@@ -44,6 +44,15 @@ class ConfigTest(unittest.TestCase):
         self.assertNotEqual(first.shm_name, second.shm_name)
         self.assertNotEqual(first.distributed_init_method, second.distributed_init_method)
 
+    def test_pd_requires_two_distinct_devices(self):
+        config = ModelConfig(str(self.path), prefill_gpu=0, decode_gpu=2)
+        self.assertEqual((config.prefill_gpu, config.decode_gpu), (0, 2))
+        for devices in ((None, 0), (0, None), (1, 1), (-1, 0), (False, 1)):
+            with self.subTest(devices=devices), self.assertRaises(ValueError):
+                ModelConfig(str(self.path), prefill_gpu=devices[0], decode_gpu=devices[1])
+        with self.assertRaisesRegex(ValueError, "tensor_parallel_size"):
+            ModelConfig(str(self.path), prefill_gpu=0, decode_gpu=1, tensor_parallel_size=2)
+
     def test_draft_model_config(self):
         options = dict(enabled_draft=True, draft_method="modeldraft")
         with self.assertRaisesRegex(ValueError, "draft_model"):
@@ -58,6 +67,10 @@ class ConfigTest(unittest.TestCase):
         config = ModelConfig(str(self.path), draft_model=str(draft), **options)
         self.assertEqual(config.max_model_len, 512)
         self.assertEqual(config.draft_hf_config.dtype, config.hf_config.dtype)
+        for early, dynamic, limit in ((True, True, 4), (False, True, 8), (True, False, 8)):
+            cfg = ModelConfig(str(self.path), draft_model=str(draft), **options, num_draft=8,
+                              draft_early_stop=early, dynamic_verify=dynamic)
+            self.assertEqual(cfg.num_draft, limit)
         data["vocab_size"] += 1
         (draft / "config.json").write_text(json.dumps(data))
         with self.assertRaisesRegex(ValueError, "vocabulary size"):

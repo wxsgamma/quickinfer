@@ -1,7 +1,8 @@
-"""A serialized, non-streaming JSON HTTP adapter for the offline engine."""
-
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from concurrent.futures import Future
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import json
+from queue import Empty, Queue
+from threading import Thread
 
 from quickinfer.sampling_params import SamplingParams
 
@@ -27,7 +28,62 @@ def parse_request(payload):
     return prompts, params
 
 
+class PDServer(ThreadingHTTPServer):
+    daemon_threads = False
+
+    def __init__(self, address, handler, engine):
+        self.worker = None
+        super().__init__(address, handler)
+        self.engine = engine
+        self.incoming = Queue()
+        self.worker = Thread(target=self.run_engine)
+        self.worker.start()
+
+    def generate(self, prompts, params):
+        results = [Future() for _ in prompts]
+        self.incoming.put((prompts, params, results))
+        return [result.result() for result in results]
+
+    def run_engine(self):
+        # HTTP 线程只入队，只有这个线程动调度器。上一条还在 D 上时，新请求就能进 P。
+        pending = {}
+        while True:
+            try:
+                batch = self.incoming.get(block=not pending)
+            except Empty:
+                batch = ()
+            if batch is None:
+                return
+            if batch:
+                prompts, params, results = batch
+                try:
+                    ids = self.engine._enqueue_requests(prompts, params)
+                    pending.update(zip(ids, results, strict=True))
+                except Exception as error:
+                    for result in results:
+                        result.set_exception(error)
+            if pending:
+                try:
+                    outputs, _ = self.engine.step()
+                    for seq_id, ids in outputs:
+                        output = {"text": self.engine.tokenizer.decode(ids), "token_ids": ids}
+                        pending.pop(seq_id).set_result(output)
+                except Exception as error:
+                    for result in pending.values():
+                        result.set_exception(error)
+                    pending.clear()
+
+    def server_close(self):
+        # 先等已接收的 HTTP 请求拿到结果，再停调度线程和 GPU worker。
+        super().server_close()
+        if self.worker is not None:
+            self.incoming.put(None)
+            self.worker.join()
+            self.worker = None
+
+
 def create_server(engine, host="127.0.0.1", port=8080):
+    pd = getattr(engine, "prefill_worker", None) is not None
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -57,13 +113,18 @@ def create_server(engine, host="127.0.0.1", port=8080):
                     raise ValueError("Content-Length must be between 1 and 1048576")
                 payload = json.loads(self.rfile.read(size))
                 prompts, params = parse_request(payload)
-                outputs = engine.generate(prompts, params, use_tqdm=False)
+                outputs = self.server.generate(prompts, params) if pd else engine.generate(prompts, params, use_tqdm=False)
             except (ValueError, TypeError, UnicodeDecodeError) as error:
                 self.send_json(400, {"error": str(error)})
                 return
+            except RuntimeError as error:
+                self.log_error("Generation failed: %s", error)
+                self.send_json(500, {"error": "Generation failed"})
+                return
             self.send_json(200, {"outputs": outputs})
 
-    # A single request at a time protects the engine's scheduler/global context.
+    if pd:
+        return PDServer((host, port), Handler, engine)
     return HTTPServer((host, port), Handler)
 
 

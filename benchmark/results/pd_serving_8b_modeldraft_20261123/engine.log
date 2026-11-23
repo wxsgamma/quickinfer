@@ -1,0 +1,189 @@
+loading dp2, repeat 1
+[rank0]:W1123 08:34:34.989000 1730084 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:34:34.989000 1730084 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:34:34.989000 1730084 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:34:34.989000 1730084 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:34:34.989000 1730084 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:34:35.082000 1730085 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:34:35.082000 1730085 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:34:35.082000 1730085 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:34:35.082000 1730085 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:34:35.082000 1730085 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:34:36.698000 1730084 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:34:36.698000 1730084 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:34:36.698000 1730084 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:34:36.698000 1730084 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:34:36.698000 1730084 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:34:36.791000 1730085 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:34:36.791000 1730085 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:34:36.791000 1730085 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:34:36.791000 1730085 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:34:36.791000 1730085 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+dp2 arena 12.0 repeat=1 n=64 out=1285.2 tok/s SLO=100.0%
+settling dp2 arena 32.0: 2 new graphs
+dp2 arena 32.0 repeat=1 n=64 out=2352.4 tok/s SLO=100.0%
+loading pd, repeat 1
+[rank0]:W1123 08:35:33.240000 1805869 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:35:33.240000 1805869 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:35:33.240000 1805869 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 3, actual 2
+[rank0]:W1123 08:35:33.240000 1805869 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:35:33.240000 1805869 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:35:40.629000 1796181 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:35:40.629000 1796181 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:35:40.629000 1796181 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:35:40.629000 1796181 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:35:40.629000 1796181 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+settling pd arena 12.0: 6 new graphs
+pd arena 12.0 repeat=1 n=64 out=1290.3 tok/s SLO=100.0%
+pd arena 32.0 repeat=1 n=64 out=2363.1 tok/s SLO=96.9%
+loading tp2, repeat 1
+[rank0]:W1123 08:36:26.614000 1884939 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:36:26.614000 1884939 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:36:26.614000 1884939 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:36:26.614000 1884939 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:36:26.614000 1884939 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank1]:W1123 08:36:26.615000 1893412 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank1]:W1123 08:36:26.615000 1893412 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank1]:W1123 08:36:26.615000 1893412 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank1]:W1123 08:36:26.615000 1893412 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank1]:W1123 08:36:26.615000 1893412 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:36:30.492000 1884939 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:36:30.492000 1884939 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:36:30.492000 1884939 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:36:30.492000 1884939 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:36:30.492000 1884939 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank1]:W1123 08:36:30.523000 1893412 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank1]:W1123 08:36:30.523000 1893412 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank1]:W1123 08:36:30.523000 1893412 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank1]:W1123 08:36:30.523000 1893412 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank1]:W1123 08:36:30.523000 1893412 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+settling tp2 arena 12.0: 1 new graphs
+tp2 arena 12.0 repeat=1 n=64 out=1077.4 tok/s SLO=100.0%
+tp2 arena 32.0 repeat=1 n=64 out=1614.6 tok/s SLO=100.0%
+loading pd, repeat 2
+[rank0]:W1123 08:37:38.333000 2018528 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:37:38.333000 2018528 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:37:38.333000 2018528 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 3, actual 2
+[rank0]:W1123 08:37:38.333000 2018528 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:37:38.333000 2018528 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:37:45.141000 2005736 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:37:45.141000 2005736 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:37:45.141000 2005736 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:37:45.141000 2005736 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:37:45.141000 2005736 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+settling pd arena 12.0: 5 new graphs
+pd arena 12.0 repeat=2 n=64 out=1313.2 tok/s SLO=100.0%
+settling pd arena 32.0: 1 new graphs
+pd arena 32.0 repeat=2 n=64 out=2381.0 tok/s SLO=100.0%
+loading tp2, repeat 2
+[rank0]:W1123 08:38:35.576000 2118941 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:38:35.576000 2118941 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:38:35.576000 2118941 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:38:35.576000 2118941 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:38:35.576000 2118941 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank1]:W1123 08:38:35.590000 2127805 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank1]:W1123 08:38:35.590000 2127805 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank1]:W1123 08:38:35.590000 2127805 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank1]:W1123 08:38:35.590000 2127805 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank1]:W1123 08:38:35.590000 2127805 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:38:37.452000 2118941 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:38:37.452000 2118941 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:38:37.452000 2118941 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:38:37.452000 2118941 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:38:37.452000 2118941 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank1]:W1123 08:38:37.468000 2127805 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank1]:W1123 08:38:37.468000 2127805 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank1]:W1123 08:38:37.468000 2127805 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank1]:W1123 08:38:37.468000 2127805 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank1]:W1123 08:38:37.468000 2127805 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+settling tp2 arena 12.0: 1 new graphs
+tp2 arena 12.0 repeat=2 n=64 out=1071.5 tok/s SLO=100.0%
+tp2 arena 32.0 repeat=2 n=64 out=1655.0 tok/s SLO=95.3%
+loading dp2, repeat 2
+[rank0]:W1123 08:39:30.723000 2200372 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:39:30.723000 2200372 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:39:30.723000 2200372 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:39:30.723000 2200372 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:39:30.723000 2200372 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:39:30.769000 2200371 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:39:30.769000 2200371 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:39:30.769000 2200371 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:39:30.769000 2200371 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:39:30.769000 2200371 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:39:32.459000 2200372 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:39:32.459000 2200372 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:39:32.459000 2200372 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:39:32.459000 2200372 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:39:32.459000 2200372 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:39:32.486000 2200371 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:39:32.486000 2200371 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:39:32.486000 2200371 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:39:32.486000 2200371 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:39:32.486000 2200371 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+dp2 arena 12.0 repeat=2 n=64 out=1275.4 tok/s SLO=100.0%
+settling dp2 arena 32.0: 2 new graphs
+dp2 arena 32.0 repeat=2 n=64 out=2323.7 tok/s SLO=100.0%
+loading tp2, repeat 3
+[rank0]:W1123 08:40:20.888000 2239887 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:40:20.888000 2239887 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:40:20.888000 2239887 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:40:20.888000 2239887 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:40:20.888000 2239887 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank1]:W1123 08:40:20.902000 2246475 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank1]:W1123 08:40:20.902000 2246475 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank1]:W1123 08:40:20.902000 2246475 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank1]:W1123 08:40:20.902000 2246475 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank1]:W1123 08:40:20.902000 2246475 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:40:22.723000 2239887 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:40:22.723000 2239887 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:40:22.723000 2239887 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:40:22.723000 2239887 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:40:22.723000 2239887 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank1]:W1123 08:40:22.734000 2246475 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank1]:W1123 08:40:22.734000 2246475 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank1]:W1123 08:40:22.734000 2246475 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank1]:W1123 08:40:22.734000 2246475 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank1]:W1123 08:40:22.734000 2246475 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+settling tp2 arena 12.0: 1 new graphs
+tp2 arena 12.0 repeat=3 n=64 out=1141.6 tok/s SLO=100.0%
+tp2 arena 32.0 repeat=3 n=64 out=1654.5 tok/s SLO=100.0%
+loading dp2, repeat 3
+[rank0]:W1123 08:41:14.354000 2292437 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:41:14.354000 2292437 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:41:14.354000 2292437 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:41:14.354000 2292437 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:41:14.354000 2292437 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:41:14.387000 2292438 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:41:14.387000 2292438 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:41:14.387000 2292438 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:41:14.387000 2292438 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:41:14.387000 2292438 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:41:16.048000 2292437 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:41:16.048000 2292437 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:41:16.048000 2292437 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:41:16.048000 2292437 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:41:16.048000 2292437 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:41:16.083000 2292438 torch/_dynamo/convert_frame.py:1016] [2/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:41:16.083000 2292438 torch/_dynamo/convert_frame.py:1016] [2/8]    function: 'add_rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:28)
+[rank0]:W1123 08:41:16.083000 2292438 torch/_dynamo/convert_frame.py:1016] [2/8]    last reason: 2/7: tensor 'x' size mismatch at index 1. expected 4096, actual 1024
+[rank0]:W1123 08:41:16.083000 2292438 torch/_dynamo/convert_frame.py:1016] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:41:16.083000 2292438 torch/_dynamo/convert_frame.py:1016] [2/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+dp2 arena 12.0 repeat=3 n=64 out=1293.4 tok/s SLO=100.0%
+settling dp2 arena 32.0: 2 new graphs
+dp2 arena 32.0 repeat=3 n=64 out=2349.3 tok/s SLO=100.0%
+loading pd, repeat 3
+[rank0]:W1123 08:42:12.004000 2335730 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:42:12.004000 2335730 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:42:12.004000 2335730 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 3, actual 2
+[rank0]:W1123 08:42:12.004000 2335730 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:42:12.004000 2335730 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+[rank0]:W1123 08:42:18.344000 2331148 torch/_dynamo/convert_frame.py:1016] [0/8] torch._dynamo hit config.recompile_limit (8)
+[rank0]:W1123 08:42:18.344000 2331148 torch/_dynamo/convert_frame.py:1016] [0/8]    function: 'rms_forward' (/home/hujiacong/whh/quickinfer/src/quickinfer/layers/layernorm.py:16)
+[rank0]:W1123 08:42:18.344000 2331148 torch/_dynamo/convert_frame.py:1016] [0/8]    last reason: 0/7: tensor 'x' rank mismatch. expected 2, actual 3
+[rank0]:W1123 08:42:18.344000 2331148 torch/_dynamo/convert_frame.py:1016] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+[rank0]:W1123 08:42:18.344000 2331148 torch/_dynamo/convert_frame.py:1016] [0/8] To diagnose recompilation issues, see https://pytorch.org/docs/main/torch.compiler_troubleshooting.html.
+settling pd arena 12.0: 5 new graphs
+pd arena 12.0 repeat=3 n=64 out=1294.0 tok/s SLO=100.0%
+settling pd arena 32.0: 1 new graphs
+pd arena 32.0 repeat=3 n=64 out=2290.8 tok/s SLO=100.0%
+18 trials, 1152 completed requests

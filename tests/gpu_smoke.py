@@ -3,6 +3,7 @@
 import argparse
 import http.client
 import json
+from itertools import accumulate
 from threading import Thread
 from unittest.mock import patch
 
@@ -90,9 +91,10 @@ def check_draft_graph(llm):
 
 
 @torch.inference_mode()
-def check_model_draft(model, draft_model, eager):
+def check_model_draft(model, draft_model, eager, dynamic, early=False):
     with LLM(model, draft_model=draft_model, enabled_draft=True, draft_method="modeldraft", num_draft=4,
-             enforce_eager=eager, max_model_len=512, max_num_batched_tokens=128, max_num_seqs=4,
+             dynamic_verify=dynamic, draft_early_stop=early, enforce_eager=eager, max_model_len=512,
+             max_num_batched_tokens=128, max_num_seqs=4,
              num_kvcache_blocks=8) as llm:
         torch.manual_seed(731)
         runner = llm.model_runner
@@ -100,9 +102,64 @@ def check_model_draft(model, draft_model, eager):
         verify = runner.draft.verify
         totals = dict(target_rows=0, draft_rows=0, full=0, rejected=0)
         max_tv = dict(target_rows=0.0, draft_rows=0.0)
+        draft_graphs = {id(graph): key for key, graph in runner.draft.graphs.items()}
+        replays = {True: 0, False: 0}
+        original_replay = torch.cuda.CUDAGraph.replay
+        original_gen = runner.draft.gen
+        original_step = runner.draft.forward_step
+        trace = []
 
-        def check(drafts, p, q):
-            outputs = verify(drafts, p, q)
+        def record(state):
+            trace.append([tuple(row) for row in state[:, 1:].tolist() if row[1] >= 0])
+
+        def replay(graph):
+            if id(graph) in draft_graphs:
+                size, sample = draft_graphs[id(graph)]
+                replays[sample] += 1
+                if early:
+                    record(runner.draft.graph_state[:size])
+            return original_replay(graph)
+
+        def forward_step(state, *args):
+            if early and eager:
+                record(state)
+            return original_step(state, *args)
+
+        def generate(seqs, tables, temperatures, cost=None):
+            limits = [seq.num_scheduled_tokens - 1 for seq in seqs]
+            count = max(limits)
+            if not eager and not early and count and not replays[True]:
+                # 重放要产生新的随机数，重设种子后同一前缀又能复现。
+                with torch.random.fork_rng(devices=[tables.device]):
+                    hot = torch.full_like(temperatures, 100.)
+                    draws = []
+                    for seed in (17, None, 17):
+                        if seed is not None:
+                            torch.cuda.manual_seed(seed)
+                        original_gen(seqs, tables, hot)
+                        draws.append([seq.draft_tokens.copy() for seq in seqs])
+                    assert draws[0] == draws[2] and draws[0] != draws[1]
+            before = replays.copy()
+            trace.clear()
+            probs = original_gen(seqs, tables, temperatures, cost)
+            if cost is not None:
+                lengths = [len(seq.draft_tokens) for seq in seqs]
+                offsets = list(accumulate(limits, initial=0))
+                # 按真实前向行逐步对照。某条停在第 k 枚后，只能再看到别的请求。
+                assert len(trace) == 1 + max(lengths)
+                for step, actual in enumerate(trace):
+                    expected = [(len(seq) - 1 + step, limit - step, offset)
+                                for seq, limit, length, offset in zip(seqs, limits, lengths, offsets)
+                                if step <= length]
+                    assert sorted(actual) == sorted(expected), (actual, expected)
+            elif not eager:
+                assert replays[True] - before[True] == count and replays[False] - before[False] == 1
+            return probs
+
+        def check(drafts, p, q, draft_rows=None):
+            outputs = verify(drafts, p, q, draft_rows)
+            if draft_rows is not None:
+                q = q[draft_rows]
             seqs = gen.call_args.args[0]
             offset = 0
             for i, (seq, draft, output) in enumerate(zip(seqs, drafts, outputs)):
@@ -136,18 +193,31 @@ def check_model_draft(model, draft_model, eager):
         llm.add_request((prompt * 256)[:255], SamplingParams(0.8, 20, True))
         llm.add_request("Name a color.", SamplingParams(1.1, 2, True))
         llm.add_request("Write a short story about the sea.", SamplingParams(0.9, 14, True))
-        with patch.object(runner.draft, "gen", wraps=runner.draft.gen) as gen, patch.object(runner.draft, "verify", check):
+        with (
+            patch.object(torch.cuda.CUDAGraph, "replay", replay),
+            patch.object(runner.draft, "forward_step", side_effect=forward_step),
+            patch.object(runner.draft, "gen", side_effect=generate) as gen,
+            patch.object(runner.draft, "verify", check),
+        ):
             while llm.scheduler.waiting:
                 llm.step()
             first = llm.scheduler.running[0]
+            if dynamic:
+                assert runner.verify_cost is not None and sum(runner.verify_cost) > 0
+                runner.verify_cost = (0., 1.)  # 全裁空，锚点仍须写在第一个块的末槽。
             llm.step()  # 第一条草稿跨第 256 个位置，第二条没有草稿。
+            if dynamic:
+                assert first.num_cached_tokens == 256 and len(first.block_table) == 1
+                runner.verify_cost = (4., 1.)
             llm.add_request(first.token_ids[:256] + [42], SamplingParams(0.7, 9, True))
             assert manager.can_allocate(llm.scheduler.waiting[0]) == 1
             while not llm.is_finished():
                 llm.step()
         assert len(manager.free_block_ids) == llm.config.num_kvcache_blocks
         assert totals["draft_rows"] > 0
-        print(json.dumps(dict(model_draft="eager" if eager else "cuda_graph", **totals, max_tv=max_tv)), flush=True)
+        print(json.dumps(dict(model_draft="eager" if eager else "cuda_graph", dynamic=dynamic, early=early,
+                              **totals, max_tv=max_tv,
+                              sample_replays=replays[True], kv_replays=replays[False])), flush=True)
 
 
 def run(model, eager):
@@ -199,7 +269,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.draft_model:
         for eager in (True, False):
-            check_model_draft(args.model, args.draft_model, eager)
+            for dynamic, early in ((False, False), (True, False), (True, True)):
+                check_model_draft(args.model, args.draft_model, eager, dynamic, early)
         raise SystemExit(0)
     for eager in (True, False):
         run(args.model, eager)

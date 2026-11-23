@@ -12,6 +12,7 @@ from quickinfer.sampling_params import SamplingParams
 from quickinfer.llmengine.sequence import Sequence
 from quickinfer.llmengine.scheduler import Scheduler
 from quickinfer.llmengine.model_runner import ModelRunner
+from quickinfer.llmengine.prefill_worker import PrefillWorker
 
 
 class LLMEngine:
@@ -26,6 +27,8 @@ class LLMEngine:
             raise RuntimeError("Quickinfer requires an NVIDIA CUDA GPU")
         if config.tensor_parallel_size > torch.cuda.device_count():
             raise ValueError("tensor_parallel_size exceeds visible CUDA devices")
+        if config.prefill_gpu is not None and max(config.prefill_gpu, config.decode_gpu) >= torch.cuda.device_count():
+            raise ValueError("prefill_gpu or decode_gpu exceeds visible CUDA devices")
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True, local_files_only=True)
         if config.draft_hf_config is not None:
             draft_tokenizer = AutoTokenizer.from_pretrained(config.draft_model, use_fast=True, local_files_only=True)
@@ -35,6 +38,7 @@ class LLMEngine:
         Sequence.block_size = config.kvcache_block_size
         self.ps = []
         self.events = []
+        self.prefill_worker = None
         ctx = mp.get_context("spawn")# spawn 启动一个干净的python解释器进程，避免fork带来的问题
         for i in range(1, config.tensor_parallel_size):
             event = ctx.Event()
@@ -43,13 +47,26 @@ class LLMEngine:
             self.ps.append(process)
             self.events.append(event)
         try:
-            self.model_runner = ModelRunner(config, 0, self.events)
+            if config.prefill_gpu is not None:
+                # 先建 NCCL 通信组再算 KV 显存，D 的块数上限取 P 已分到的块数。
+                self.prefill_worker = PrefillWorker(config, ctx)
+                config.num_kvcache_blocks = self.prefill_worker.num_blocks
+            self.model_runner = ModelRunner(config, 0, self.events, device=config.decode_gpu)
+            if self.prefill_worker is not None:
+                self.prefill_worker.link.set_caches(self.model_runner.kv_caches)
         except BaseException:
+            if self.prefill_worker is not None:
+                self.prefill_worker.close(abort=True)
             for process in self.ps:
                 if process.is_alive():
                     process.terminate()
                 process.join(timeout=5)
-            if torch.distributed.is_initialized():
+            if hasattr(self, "model_runner") and config.prefill_gpu is not None:
+                self.model_runner.exit()
+                del self.model_runner
+                from quickinfer.layers.rotary_embedding import get_rope
+                get_rope.cache_clear()
+            elif torch.distributed.is_initialized():
                 torch.distributed.destroy_process_group()
             raise
         config.eos = self.tokenizer.eos_token_id
@@ -62,14 +79,18 @@ class LLMEngine:
             return
         self._closed = True
         atexit.unregister(self.exit)
-        self.model_runner.call("exit")
-        del self.model_runner
-        for p in self.ps:
-            p.join()# 等待子进程结束
-        from quickinfer.layers.rotary_embedding import get_rope
-        get_rope.cache_clear()
-        gc.collect()
-        torch.cuda.empty_cache()
+        try:
+            if self.prefill_worker is not None:
+                self.prefill_worker.close()
+        finally:
+            self.model_runner.call("exit")
+            del self.model_runner
+            for p in self.ps:
+                p.join()# 等待子进程结束
+            from quickinfer.layers.rotary_embedding import get_rope
+            get_rope.cache_clear()
+            gc.collect()
+            torch.cuda.empty_cache()
 
     close = exit
 
@@ -102,18 +123,44 @@ class LLMEngine:
         seq = Sequence(prompt, sampling_params)
         self.scheduler.add(seq)
 
+    def _enqueue_requests(self, prompts, sampling_params):
+        if not isinstance(sampling_params, list):
+            sampling_params = [sampling_params] * len(prompts)
+        if len(sampling_params) != len(prompts):
+            raise ValueError("Provide one SamplingParams per prompt")
+        # 整批校验通过再入队，HTTP 用 seq_id 把各自的结果交回原请求。
+        seqs = [Sequence(self._prepare_request(p, sp), sp) for p, sp in zip(prompts, sampling_params)]
+        for seq in seqs:
+            self.scheduler.add(seq)
+        return [seq.seq_id for seq in seqs]
+
     def step(self):
-        seqs, is_prefill = self.scheduler.schedule()
+        if self._closed:
+            raise RuntimeError("Engine is closed")
+        if self.prefill_worker is None:
+            return self._run_step(*self.scheduler.schedule())
+        try:
+            with torch.cuda.device(self.config.decode_gpu):
+                return self._run_step(*self.prefill_worker.schedule(self.scheduler))
+        except BaseException:
+            try:
+                self.prefill_worker.close(abort=True)
+            finally:
+                self.exit()
+            raise
+
+    def _run_step(self, seqs, is_prefill, token_ids=None):
         prefill_tokens = sum(seq.num_scheduled_tokens for seq in seqs) if is_prefill else 0
-        is_draft = not is_prefill and any(seq.num_scheduled_tokens > 1 for seq in seqs)
-        token_ids = self.model_runner.call("run", seqs, is_prefill, is_draft)
+        if token_ids is None:
+            is_draft = not is_prefill and any(seq.num_scheduled_tokens > 1 for seq in seqs)
+            token_ids = self.model_runner.call("run", seqs, is_prefill, is_draft)
         num_emitted = self.scheduler.postprocess(seqs, token_ids, is_prefill)
         num_tokens = prefill_tokens if is_prefill else -num_emitted
         outputs = [(seq.seq_id, seq.completion_token_ids) for seq in seqs if seq.is_finished]
         return outputs, num_tokens
 
     def is_finished(self):
-        return self.scheduler.is_finished()
+        return self.scheduler.is_finished() and not (self.prefill_worker and self.prefill_worker.pending)
 
     def generate(
         self,
@@ -123,13 +170,7 @@ class LLMEngine:
     ) -> list[dict]:
         if self._closed:
             raise RuntimeError("Engine is closed")
-        if not isinstance(sampling_params, list):
-            sampling_params = [sampling_params] * len(prompts)
-        if len(sampling_params) != len(prompts):
-            raise ValueError("Provide one SamplingParams per prompt")
-        prepared = [self._prepare_request(p, sp) for p, sp in zip(prompts, sampling_params)]
-        for prompt, sp in zip(prepared, sampling_params):
-            self.scheduler.add(Sequence(prompt, sp))
+        self._enqueue_requests(prompts, sampling_params)
         pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True, disable=not use_tqdm)
         outputs = {}
         prefill_throughput = decode_throughput = 0.
