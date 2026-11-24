@@ -63,6 +63,10 @@ def add_engine_args(parser):
     parser.add_argument("--enforce-eager", action="store_true", help="Disable CUDA graph capture/replay")
     parser.add_argument("--kvcache-block-size", type=int, default=256)
     parser.add_argument("--num-kvcache-blocks", type=int, default=-1, help="Optional KV cache block cap")
+    add_draft_args(parser)
+
+
+def add_draft_args(parser):
     parser.add_argument("--enabled-draft", nargs="?", const=True, default=False, type=parse_bool,
                         help="Enable speculative decoding")
     parser.add_argument("--draft-method", choices=["ngram", "n-gram", "modeldraft"], default="ngram")
@@ -72,6 +76,7 @@ def add_engine_args(parser):
                         help="Choose a verification prefix per request for modeldraft")
     parser.add_argument("--draft-early-stop", nargs="?", const=True, default=True, type=parse_bool,
                         help="Stop modeldraft during generation; false selects the prefix after generation")
+
 
 def build_parser():
     parser = argparse.ArgumentParser(prog="quickinfer", description="Lightweight Qwen3 inference")

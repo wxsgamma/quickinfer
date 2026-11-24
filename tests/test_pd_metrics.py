@@ -1,6 +1,8 @@
 import unittest
+import numpy as np
 
 from benchmark.pd_metrics import report, summarize
+from benchmark.pd_steady_report import request_times
 
 
 def record(key, arrival, events, kind="chat"):
@@ -15,6 +17,15 @@ def trial(records, repeat=0, rate=4.):
 
 
 class PDMetricsTest(unittest.TestCase):
+    def test_speculative_tokens_share_one_round_trip_in_steady_and_drain(self):
+        req = np.array([[0, 2, 5, -1, -1, 0, 0]])
+        emit = np.array([[30, 70, 70, 70, 110]])
+        steps = np.array([[0,1,5,29,1,128], [0,0,40,65,1,3], [0,0,80,105,1,1]])
+        costs, drain = request_times(req, emit, steps, None, False, 55)
+        self.assertAlmostEqual(costs["scheduled_after_first"][0], .05)
+        self.assertAlmostEqual(costs["between_decode_steps"][0], .02)
+        self.assertEqual(drain["scheduled_after_first"][0], 35)
+
     def test_one_token_and_speculative_chunk(self):
         a = record("a", 0, [[100000, 1], [220000, 3]])
         b = record("b", 50000, [[60000, 1]])

@@ -87,6 +87,11 @@ def report(trials, ttft_ms, tpot_ms, attainment, max_gap_ms=None):
         pooled["engine"] = {k: sum(lane[k] for lane in transport) for k in (
             "prefill_steps", "decode_steps", "prefill_tokens_computed", "decode_steps_with_prefill_pending",
             "preemptions", "kv_p_to_d_bytes", "kv_d_to_p_bytes", "kv_p_to_d_stream_ms", "kv_d_to_p_stream_ms")}
+        if transport and "draft_tokens_verified" in transport[0]:
+            for key in ("verify_steps", "draft_tokens_verified", "draft_tokens_accepted", "decode_tokens"):
+                pooled["engine"][key] = sum(lane[key] for lane in transport)
+            verified = pooled["engine"]["draft_tokens_verified"]
+            pooled["engine"]["draft_acceptance"] = pooled["engine"]["draft_tokens_accepted"] / verified if verified else None
         pooled["nvlink_bytes"] = {k: sum(t["nvlink_bytes"][k] for t in runs) for k in runs[0]["nvlink_bytes"]}
         pooled["gpu"] = {}
         energy = 0.

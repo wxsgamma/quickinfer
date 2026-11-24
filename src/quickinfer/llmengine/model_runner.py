@@ -359,14 +359,17 @@ class ModelRunner:
             return self.model.compute_logits(graph_vars["outputs"][:bs])
 
     @torch.inference_mode()
-    def run(self, seqs: list[Sequence], is_prefill: bool, is_draft: bool = False) -> list[int] | list[list[int]] | None:
+    def run(self, seqs: list[Sequence], is_prefill: bool, is_draft: bool = False, target_sampler=None) -> list[int] | list[list[int]] | None:
         try:
             draft_probs = None
             draft_rows = None
             if self.draft is not None and not is_prefill:
                 temperatures = self.prepare_sample(seqs) if self.rank == 0 else None
                 tables = self.prepare_block_tables(seqs)
-                dynamic = is_draft and self.verify_cost is not None
+                if target_sampler is not None:
+                    # 逐 token 对照时让单卡和 D 猜同一段，送验宽度也不依赖两张卡的启动测速。
+                    torch.cuda.manual_seed(sum(len(seq) for seq in seqs))
+                dynamic = is_draft and self.verify_cost is not None and target_sampler is None
                 if dynamic and self.config.draft_early_stop:
                     draft_probs, draft_rows = self.draft.gen(seqs, tables, temperatures, self.verify_cost)
                 else:
@@ -384,13 +387,15 @@ class ModelRunner:
             logits = self.run_model(input_ids, positions, is_prefill)
             if self.rank != 0:
                 return None
-            if draft_probs is not None:
+            if draft_probs is not None and target_sampler is None:
                 probs = Sampler.probabilities(logits, temperatures)
                 drafts = [seq.draft_tokens for seq in seqs]
                 if draft_rows is not None:
                     return self.draft.verify(drafts, probs, draft_probs, draft_rows)
                 return self.draft.verify(drafts, probs, draft_probs)
-            token_ids = self.sampler(logits, temperatures).tolist()
+            # 对照模式用主模型的 greedy token 验同一批草稿；正常 modeldraft 走上面的 p/q 拒绝采样。
+            sample = self.sampler if target_sampler is None else target_sampler
+            token_ids = sample(logits, temperatures).tolist()
             if not is_draft:
                 return token_ids
 

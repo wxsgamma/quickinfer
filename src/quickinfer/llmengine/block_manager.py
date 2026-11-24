@@ -96,8 +96,11 @@ class BlockManager:
     def trim_blocks(self, seq: Sequence):
         # 有效 KV 到哪一块就保留到哪一块，末块内被拒绝的槽位下次覆盖。
         keep = (seq.num_cached_tokens + self.block_size - 1) // self.block_size
-        while len(seq.block_table) > keep:
-            block_id = seq.block_table.pop()
+        self.release_blocks(seq.block_table, keep)
+
+    def release_blocks(self, table, keep=0):
+        while len(table) > keep:
+            block_id = table.pop()
             block = self.blocks[block_id]
             block.ref_count -= 1
             if block.ref_count == 0:

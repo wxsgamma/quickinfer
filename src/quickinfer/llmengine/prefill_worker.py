@@ -64,6 +64,10 @@ class KVTransfer:
             else:
                 spans.append((start, end))
 
+        self.transfer_spans(spans, send=send)
+
+    def transfer_spans(self, spans, *, send):
+        # 两端块号可以不同，这里的顺序和每段长度由发送方和接收方共同确定。
         self.stream.wait_stream(torch.cuda.current_stream(self.device))
         op = self.group.send if send else self.group.recv
         with torch.cuda.stream(self.stream):
